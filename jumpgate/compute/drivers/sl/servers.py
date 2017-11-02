@@ -8,6 +8,7 @@ import SoftLayer
 from jumpgate.common import config
 from jumpgate.common import error_handling
 from jumpgate.common import utils
+from osemetaclient import client as metaclient
 
 
 LOG = logging.getLogger(__name__)
@@ -197,7 +198,10 @@ class ServersV2(object):
             self._handle_user_data(payload, body)
             self._handle_datacenter(payload, body)
             if networks:
-                self._handle_network(payload, client, networks)
+                # Deduplicate on request networks
+                nets = []
+                nets = [nets.append(n) or n for n in networks if n not in nets]
+                self._handle_network(payload, client, nets)
             new_instance = cci.create_instance(**payload)
         except Exception as e:
             return error_handling.bad_request(resp, message=str(e))
@@ -266,7 +270,7 @@ class ServersV2(object):
             user_data['personality'] = utils.lookup(body,
                                                     'server',
                                                     'personality')
-        payload['userdata'] = json.dumps(user_data)
+        payload['post_uri'] = get_post_uri(json.dumps(user_data))
 
     def _handle_datacenter(self, payload, body):
         datacenter = (utils.lookup(body, 'server', 'availability_zone')
@@ -657,3 +661,8 @@ def get_virtual_guest_mask():
     ]
 
     return 'mask[%s]' % ','.join(mask)
+
+
+def get_post_uri(data):
+    client = metaclient.Client()
+    return client.get_post_uri(data)

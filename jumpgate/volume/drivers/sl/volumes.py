@@ -249,6 +249,8 @@ class VolumesV1(object):
                                         "SoftLayerAPIError",
                                         e.faultString,
                                         code=e.faultCode)
+        except IndexError as e:
+            return error_handling.bad_request(resp, str(e))
         except Exception as e:
             return error_handling.volume_fault(resp, str(e))
 
@@ -311,9 +313,14 @@ class VolumesV1(object):
                         ' True and there is no volume with'
                         ' matching capacity')
             else:
-                capacity_idx = min(price_matrix, key=lambda x: abs(x - size))
-
-            return price_matrix[capacity_idx]
+                capacity_idx = sorted([i for i in price_matrix
+                                       if i >= size])[0]
+            try:
+                return price_matrix[capacity_idx]
+            except IndexError:
+                msg = "Unsupported volume size: %d" % size
+                LOG.error(msg)
+                raise IndexError(msg)
 
         def _find_availibility_zone_location(zone):
             # make sure there is an availability_zone selected
